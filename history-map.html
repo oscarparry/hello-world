@@ -131,6 +131,7 @@ circle.nd{cursor:pointer}
   <div class="spacer"></div>
   <button class="b m-hide" id="linesBtn" aria-pressed="false">All connections</button>
   <button class="b m-hide" id="unreadBtn" aria-pressed="false">Unread only</button>
+  <button class="b m-hide" id="namesBtn" aria-pressed="true">All names</button>
   <button class="b m-hide" id="tableBtn" aria-pressed="false">Table</button>
   <button class="b m-hide" id="themeBtn">Dark</button>
 </header>
@@ -170,9 +171,10 @@ function xOf(y){
 const W=xOf(2026)+PAD+40;
 
 /* ---------- lane geometry, driven by how many rows the labels need ---------- */
-const LANE_TOP=52, ROW=17, BASE_H=132, MAXROW=40;
+const LANE_TOP=52, ROW=17, BASE_H=132;
+let MAXROW=200, allNames=true;
 function labelW(n){ return showLabel(n)? (Math.min(n.name.length,46)*5.6+16) : 13; }
-function showLabel(n){ return n.weight>=4; }
+function showLabel(n){ return allNames || n.weight>=4; }
 let lanes={}, POS={}, LANE_BOTTOM=0, H=0;
 function pack(){
   const rowOf={}, used={};
@@ -509,8 +511,14 @@ document.getElementById("keyBtn").onclick=e=>{
   l.classList.toggle("open",on); e.target.setAttribute("aria-pressed",on);
 };
 document.getElementById("closePanel").onclick=()=>{ sel=null; draw(); renderPanel(); };
+document.getElementById("namesBtn").onclick=e=>{
+  allNames=!allNames; MAXROW=allNames?200:40;
+  e.target.setAttribute("aria-pressed",allNames);
+  const s=document.getElementById("scroll"), keepX=s.scrollLeft;
+  pack(); draw(); renderPanel(); s.scrollLeft=keepX;
+};
 if(matchMedia("(max-width:760px)").matches){
-  Z=.7;
+  Z=.85;
   requestAnimationFrame(()=>{
     const xs=Object.values(POS).map(q=>q.x);
     if(xs.length) document.getElementById("scroll").scrollLeft=Math.max(0,Math.min(...xs)*Z-PAD*Z-10);
