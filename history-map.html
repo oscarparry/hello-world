@@ -85,24 +85,66 @@ text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 .evname{font-size:10.5px;fill:var(--muted)}
 circle.nd{cursor:pointer}
 .dim{opacity:.13}
+
+/* ---------- phone ---------- */
+.m-only{display:none}
+#mobbar{display:none}
+#closePanel{display:none;position:absolute;right:13px;top:11px;z-index:3;
+  border:1px solid var(--ring);background:var(--surface);color:var(--ink2);
+  border-radius:999px;width:30px;height:30px;font-size:17px;line-height:1;
+  cursor:pointer;padding:0}
+@media (pointer:coarse){ #tip{display:none!important} }
+@media (max-width:760px){
+  header{padding:7px 11px;gap:8px;row-gap:7px}
+  h1{font-size:14.5px;flex:1;min-width:0}
+  h1 small{font-size:10.5px}
+  .spacer{display:none}
+  .m-only{display:inline-block}
+  header .m-hide{display:none}
+  header.open .chips{display:flex;width:100%}
+  header.open #q{display:block;width:100%;min-width:0}
+  header.open button.m-hide{display:inline-block}
+  #mobbar{display:flex;gap:7px;align-items:center;flex:none;
+    padding:6px 11px;background:var(--panel);border-bottom:1px solid var(--ring)}
+  #mobbar select{flex:1;min-width:0}
+  #mobbar button.b{flex:none;min-width:38px;font-size:14px;padding:5px 10px}
+  .legendnote{display:none}
+  .legendnote.open{display:block;flex:none}
+  aside{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:64vh;
+    border-left:0;border-top:1px solid var(--ring);border-radius:15px 15px 0 0;
+    padding:20px 16px calc(30px + env(safe-area-inset-bottom));z-index:12;
+    box-shadow:0 -8px 30px rgba(0,0,0,.22);-webkit-overflow-scrolling:touch}
+  aside h2{padding-right:38px}
+  #closePanel{display:block}
+  #tableview{padding:10px 11px 60px}
+  table{font-size:12px}
+  th,td{padding:5px 6px}
+}
 </style>
 </head>
 <body>
 <header>
   <h1>A materialist map of ideas<small id="sub"></small></h1>
-  <div class="chips" id="chips"></div>
-  <input type="search" id="q" placeholder="Search title or author" autocomplete="off">
+  <button class="b m-only" id="moreBtn" aria-pressed="false">Filters</button>
+  <div class="chips m-hide" id="chips"></div>
+  <input type="search" id="q" class="m-hide" placeholder="Search title or author" autocomplete="off">
   <div class="spacer"></div>
-  <button class="b" id="linesBtn" aria-pressed="false">All connections</button>
-  <button class="b" id="unreadBtn" aria-pressed="false">Unread only</button>
-  <button class="b" id="tableBtn" aria-pressed="false">Table</button>
-  <button class="b" id="themeBtn">Dark</button>
+  <button class="b m-hide" id="linesBtn" aria-pressed="false">All connections</button>
+  <button class="b m-hide" id="unreadBtn" aria-pressed="false">Unread only</button>
+  <button class="b m-hide" id="tableBtn" aria-pressed="false">Table</button>
+  <button class="b m-hide" id="themeBtn">Dark</button>
 </header>
+<div id="mobbar">
+  <select id="jump" aria-label="Jump to period"><option value="">Jump to period</option></select>
+  <button class="b" id="zOut" aria-label="Zoom out">&minus;</button>
+  <button class="b" id="zIn" aria-label="Zoom in">+</button>
+  <button class="b" id="keyBtn" aria-pressed="false">Key</button>
+</div>
 <div class="legendnote" id="ln"></div>
 <main>
   <div id="scroll"><svg id="svg"></svg></div>
   <div id="tableview"></div>
-  <aside id="panel" class="hidden"></aside>
+  <aside id="panel" class="hidden"><button id="closePanel" aria-label="Close">&times;</button><div id="panelbody"></div></aside>
 </main>
 <div id="tip"></div>
 <script>
@@ -111,6 +153,7 @@ const NS="http://www.w3.org/2000/svg";
 const byId=Object.fromEntries(D.nodes.map(n=>[n.id,n]));
 const evById=Object.fromEntries(D.events.map(e=>[e.id,e]));
 let theme="light", pal=D.light;
+let Z=1;
 let active=new Set(D.domainOrder), sel=null, showAll=false, unreadOnly=false, query="";
 const isRead=n=>(n.status||"").toLowerCase()==="read";
 
@@ -161,10 +204,11 @@ const svg=document.getElementById("svg");
 let gutter=null;
 function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
 function syncGutter(){ if(gutter) gutter.setAttribute("transform",
-  `translate(${document.getElementById("scroll").scrollLeft},0)`); }
+  `translate(${document.getElementById("scroll").scrollLeft/Z},0)`); }
 document.getElementById("scroll").addEventListener("scroll",syncGutter,{passive:true});
 function draw(){
-  svg.innerHTML=""; svg.setAttribute("width",W); svg.setAttribute("height",H);
+  svg.innerHTML=""; svg.setAttribute("width",Math.round(W*Z));
+  svg.setAttribute("height",Math.round(H*Z));
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
   const gBands=el("g",{},svg), gGrid=el("g",{},svg), gEdge=el("g",{},svg),
         gNode=el("g",{},svg), gLane=el("g",{},svg), gBase=el("g",{},svg);
@@ -268,9 +312,16 @@ function draw(){
 function match(n){const q=query.toLowerCase();return n.name.toLowerCase().includes(q)||(n.person||"").toLowerCase().includes(q);}
 
 /* ---------- side panel ---------- */
-function select(id){ sel=(sel===id?null:id); draw(); renderPanel(); }
+function select(id){
+  sel=(sel===id?null:id); draw(); renderPanel();
+  if(sel&&matchMedia("(max-width:760px)").matches&&POS[sel]){
+    document.getElementById("scroll").scrollTo({top:Math.max(0,POS[sel].y*Z-46),behavior:"smooth"});
+  }
+}
 function periodOf(n){ return D.periods.find(p=>p.id===n.era); }
 const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const PB=()=>document.getElementById("panelbody");
+const CTR=()=>Math.min(500,document.getElementById("scroll").clientWidth*0.42);
 function renderPanel(){
   const a=document.getElementById("panel");
   if(!sel){a.classList.add("hidden");return;}
@@ -287,7 +338,7 @@ function renderPanel(){
       ${esc(o.name)}<span class="rel"> · ${esc(o.person||"")} ${o.year_disp||o.year} · ${e.type}${e.note?" · "+esc(e.note):""}</span></button>`;
   }).join("");
   const st=(n.status||"");
-  a.innerHTML=`
+  PB().innerHTML=`
     <h2>${esc(n.name)}</h2>
     <div class="by">${esc(n.person||"")} ${n.year_disp?"· "+esc(n.year_disp):""}</div>
     <div class="meta">
@@ -311,7 +362,7 @@ function renderPanel(){
     ${!ins.length&&!outs.length&&!mat.length?`<h3>Connections</h3><p>None recorded yet.</p>`:""}`;
   a.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{
     sel=b.dataset.go; draw(); renderPanel();
-    document.getElementById("scroll").scrollTo({left:POS[sel].x-500,behavior:"smooth"});
+    document.getElementById("scroll").scrollTo({left:POS[sel].x*Z-CTR(),behavior:"smooth"});
   });
   a.querySelectorAll("[data-ev]").forEach(b=>b.onclick=()=>
     showEvent(D.events.find(x=>x.id===b.dataset.ev)));
@@ -324,11 +375,11 @@ function showEvent(ev){
     return `<button class="lnk" data-go2="${o.id}" style="border-left-color:${pal[o.domain]}">
       ${esc(o.name)}<span class="rel"> · ${esc(o.person||"")}${why?" · "+esc(why):""}</span></button>`;
   }).join("");
-  a.innerHTML=`<h2>${esc(ev.name)}</h2><div class="by">${ev.year<0?Math.abs(ev.year)+" BCE":ev.year} · ${esc(ev.kind)}</div>
+  PB().innerHTML=`<h2>${esc(ev.name)}</h2><div class="by">${ev.year<0?Math.abs(ev.year)+" BCE":ev.year} · ${esc(ev.kind)}</div>
     <h3>The material fact</h3><p class="read">${esc(ev.note)}</p>
     ${gives?`<h3>Gives rise to</h3>${gives}`:""}`;
   a.querySelectorAll("[data-go2]").forEach(b=>b.onclick=()=>{ select(b.dataset.go2);
-    document.getElementById("scroll").scrollTo({left:POS[b.dataset.go2].x-500,behavior:"smooth"}); });
+    document.getElementById("scroll").scrollTo({left:POS[b.dataset.go2].x*Z-CTR(),behavior:"smooth"}); });
 }
 
 /* ---------- tooltip ---------- */
@@ -401,6 +452,71 @@ function legend(){
 }
 document.getElementById("sub").textContent=
   `${D.nodes.length} works · ${D.edges.length} connections · built ${D.built}`;
+
+/* ---------- phone: zoom, period jump, collapsible chrome ---------- */
+function applyZoom(){
+  svg.setAttribute("width",Math.round(W*Z));
+  svg.setAttribute("height",Math.round(H*Z));
+  syncGutter();
+}
+function zoomTo(nz,cx,cy){
+  const s=document.getElementById("scroll");
+  nz=Math.max(.22,Math.min(2.5,nz));
+  const ux=(s.scrollLeft+cx)/Z, uy=(s.scrollTop+cy)/Z;
+  Z=nz; applyZoom();
+  s.scrollLeft=ux*Z-cx; s.scrollTop=uy*Z-cy;
+}
+function zoomStep(f){
+  const s=document.getElementById("scroll");
+  zoomTo(Z*f, s.clientWidth/2, s.clientHeight/2);
+}
+document.getElementById("zIn").onclick=()=>zoomStep(1.3);
+document.getElementById("zOut").onclick=()=>zoomStep(1/1.3);
+
+(function(){
+  const s=document.getElementById("scroll");
+  let d0=0, z0=1, cx=0, cy=0;
+  const dist=tt=>Math.hypot(tt[0].clientX-tt[1].clientX,tt[0].clientY-tt[1].clientY);
+  s.addEventListener("touchstart",e=>{
+    if(e.touches.length===2){
+      d0=dist(e.touches); z0=Z;
+      const r=s.getBoundingClientRect();
+      cx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left;
+      cy=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top;
+    }
+  },{passive:true});
+  s.addEventListener("touchmove",e=>{
+    if(e.touches.length===2&&d0){ e.preventDefault(); zoomTo(z0*dist(e.touches)/d0,cx,cy); }
+  },{passive:false});
+  s.addEventListener("touchend",()=>{d0=0;},{passive:true});
+})();
+
+const jumpSel=document.getElementById("jump");
+D.periods.forEach(p=>{
+  const o=document.createElement("option"); o.value=p.id; o.textContent=p.name;
+  jumpSel.appendChild(o);
+});
+jumpSel.onchange=()=>{
+  const p=D.periods.find(x=>x.id===jumpSel.value); if(!p)return;
+  document.getElementById("scroll").scrollTo({left:Math.max(0,xOf(p.start)*Z-26),behavior:"smooth"});
+};
+document.getElementById("moreBtn").onclick=e=>{
+  const h=document.querySelector("header"), on=!h.classList.contains("open");
+  h.classList.toggle("open",on); e.target.setAttribute("aria-pressed",on);
+};
+document.getElementById("keyBtn").onclick=e=>{
+  const l=document.getElementById("ln"), on=!l.classList.contains("open");
+  l.classList.toggle("open",on); e.target.setAttribute("aria-pressed",on);
+};
+document.getElementById("closePanel").onclick=()=>{ sel=null; draw(); renderPanel(); };
+if(matchMedia("(max-width:760px)").matches){
+  Z=.7;
+  requestAnimationFrame(()=>{
+    const xs=Object.values(POS).map(q=>q.x);
+    if(xs.length) document.getElementById("scroll").scrollLeft=Math.max(0,Math.min(...xs)*Z-PAD*Z-10);
+  });
+}
+
 legend();
 draw();
 </script>
